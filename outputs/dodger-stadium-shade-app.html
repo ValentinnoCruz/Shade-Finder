@@ -1,0 +1,1398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dodger Stadium 3D Shade Map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #151d27;
+      --muted: #627180;
+      --line: #d9e1e8;
+      --panel: #ffffff;
+      --bg: #f3f6f8;
+      --sunny: #f4d25f;
+      --mixed: #e7904e;
+      --shade: #4b8fc0;
+      --deep-shade: #235f95;
+      --blue: #1e5ea8;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      padding: 16px clamp(16px, 3vw, 32px);
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      align-items: center;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.25rem, 2vw, 1.8rem);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .subhead {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 5px;
+    }
+
+    .summary {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      justify-content: end;
+      min-width: 260px;
+    }
+
+    .summary strong {
+      font-size: clamp(1.3rem, 2.4vw, 2rem);
+      line-height: 1;
+    }
+
+    .summary span {
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+      padding: 18px clamp(14px, 2.5vw, 28px) 24px;
+      align-items: start;
+    }
+
+    .side-panel { display: none !important; }
+    .legend { display: none !important; }
+    .summary { display: none !important; }
+
+    .stage {
+      min-width: 0;
+      display: grid;
+      gap: 12px;
+    }
+
+    .toolbar,
+    .viewer,
+    .side-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(30, 49, 70, 0.06);
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(108px, auto)) minmax(220px, 1fr);
+      gap: 12px;
+      padding: 12px;
+      align-items: end;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    input,
+    button {
+      font: inherit;
+    }
+
+    input[type="date"],
+    input[type="time"] {
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 10px;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--blue);
+    }
+
+    .quick,
+    .view-tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      height: 40px;
+      border: 1px solid #c8d5e0;
+      background: #f8fafc;
+      color: var(--ink);
+      border-radius: 6px;
+      padding: 0 12px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    button:hover,
+    button:focus-visible {
+      border-color: #102f58;
+      outline: none;
+    }
+
+    .viewer {
+      position: relative;
+      overflow: hidden;
+      min-height: 620px;
+      background: #dbe7ef;
+    }
+
+    #scene {
+      display: block;
+      width: 100%;
+      height: min(72vh, 720px);
+      min-height: 560px;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    #scene:active {
+      cursor: grabbing;
+    }
+
+    .view-tools {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 2;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(214, 224, 232, 0.9);
+      border-radius: 8px;
+      padding: 8px;
+      backdrop-filter: blur(8px);
+    }
+
+    .view-tools button {
+      height: 34px;
+      padding: 0 10px;
+    }
+
+    .compass {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 2;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(214, 224, 232, 0.9);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 8px rgba(21, 29, 39, 0.12);
+    }
+
+    .compass-dial {
+      position: absolute;
+      inset: 0;
+      transform: rotate(0deg);
+    }
+
+    .compass-dial span {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--muted);
+      transform: translate(-50%, -50%);
+    }
+
+    .compass-n { top: 9px !important; color: #c8472f !important; }
+    .compass-s { top: auto !important; bottom: 9px !important; transform: translate(-50%, 50%) !important; }
+    .compass-e { left: 9px !important; }
+    .compass-w { left: auto !important; right: 9px !important; transform: translate(50%, -50%) !important; }
+
+    .compass-needle {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 3px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(to bottom, #c8472f 0%, #c8472f 50%, #4b8fc0 50%, #4b8fc0 100%);
+      border-radius: 2px;
+    }
+
+    .legend {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(214, 224, 232, 0.9);
+      border-radius: 8px;
+      padding: 10px;
+      backdrop-filter: blur(8px);
+      color: var(--muted);
+      font-size: 0.85rem;
+      z-index: 2;
+    }
+
+    .key {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+
+    .hover-chip {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      z-index: 2;
+      max-width: min(320px, calc(100% - 24px));
+      background: rgba(14, 28, 42, 0.88);
+      color: #fff;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+      line-height: 1.35;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .hover-chip.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .side-panel {
+      padding: 16px;
+      display: grid;
+      gap: 16px;
+      position: sticky;
+      top: 18px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      min-height: 78px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 1.28rem;
+      line-height: 1;
+    }
+
+    .section-card,
+    .ranked {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .section-card h2,
+    .ranked h2 {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.2;
+    }
+
+    .shade-bar {
+      height: 14px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #e8eef3;
+      border: 1px solid #d2dde6;
+    }
+
+    .shade-bar > div {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--sunny), var(--mixed), var(--shade), var(--deep-shade));
+      transition: width 220ms ease;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+      margin: 0;
+    }
+
+    .ranking {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .ranking li {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.92rem;
+      border-bottom: 1px solid #edf2f6;
+      padding-bottom: 8px;
+    }
+
+    .ranking li:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .ranking b {
+      color: var(--ink);
+    }
+
+    .pill {
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-weight: 800;
+      color: #102033;
+      min-width: 58px;
+      text-align: center;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    @media (max-width: 1020px) {
+      header,
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .summary {
+        justify-content: start;
+      }
+
+      main {
+        padding-top: 12px;
+      }
+
+      .toolbar {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .toolbar label:last-child {
+        grid-column: 1 / -1;
+      }
+
+      .side-panel {
+        position: static;
+      }
+    }
+
+    @media (max-width: 640px) {
+      header {
+        padding: 14px;
+      }
+
+      main {
+        padding: 12px;
+      }
+
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .viewer {
+        min-height: 480px;
+      }
+
+      #scene {
+        height: 520px;
+        min-height: 520px;
+      }
+
+      .view-tools {
+        left: 10px;
+        top: 10px;
+        right: 10px;
+      }
+
+      .hover-chip {
+        top: 64px;
+      }
+
+      .legend {
+        position: static;
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+        border-radius: 0;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Dodger Stadium 3D Shade Map</h1>
+        <div class="subhead">Interactive shade estimate for Los Angeles time.</div>
+      </div>
+      <div class="summary" aria-live="polite">
+        <strong id="overallShade">--%</strong>
+        <span id="summaryText">estimated shaded seating</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="stage" aria-label="Shade controls and 3D stadium">
+        <div class="toolbar">
+          <label>
+            Date
+            <input id="dateInput" type="date">
+          </label>
+          <label>
+            Time
+            <input id="timeInput" type="time" step="900">
+          </label>
+          <div class="quick" aria-label="Quick time choices">
+            <button type="button" data-time="13:10">Day</button>
+            <button type="button" data-time="16:10">Late</button>
+            <button type="button" data-time="19:10">Night</button>
+          </div>
+          <div class="quick">
+            <button type="button" id="todayBtn">Today</button>
+            <button type="button" id="summerBtn">Summer</button>
+          </div>
+          <label>
+            Time scrubber
+            <input id="timeRange" type="range" min="360" max="1320" value="790" step="15">
+          </label>
+        </div>
+
+        <div class="viewer">
+          <canvas id="scene" aria-label="3D rendering of Dodger Stadium shaded and unshaded seating"></canvas>
+          <div class="view-tools" aria-label="Camera controls">
+            <button type="button" data-view="reset">Reset</button>
+            <button type="button" data-view="top">Top</button>
+            <button type="button" data-view="low">Low</button>
+          </div>
+          <div id="hoverChip" class="hover-chip"></div>
+          <div class="compass" id="compass" aria-hidden="true">
+            <div class="compass-dial" id="compassDial">
+              <span class="compass-n">N</span>
+              <span class="compass-e">E</span>
+              <span class="compass-s">S</span>
+              <span class="compass-w">W</span>
+              <span class="compass-needle"></span>
+            </div>
+          </div>
+          <div class="legend" aria-label="Legend">
+            <span class="key"><span class="swatch" style="background:#f4d25f"></span> Mostly sunny</span>
+            <span class="key"><span class="swatch" style="background:#e7904e"></span> Mixed</span>
+            <span class="key"><span class="swatch" style="background:#4b8fc0"></span> Mostly shaded</span>
+            <span class="key"><span class="swatch" style="background:#235f95"></span> Deep shade or after sunset</span>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-panel" aria-label="Shade details">
+        <div class="metric-grid">
+          <div class="metric">
+            <span>Sun altitude</span>
+            <strong id="altitude">-- deg</strong>
+          </div>
+          <div class="metric">
+            <span>Sun azimuth</span>
+            <strong id="azimuth">-- deg</strong>
+          </div>
+          <div class="metric">
+            <span>Best shade side</span>
+            <strong id="bestSide">--</strong>
+          </div>
+          <div class="metric">
+            <span>Exposure</span>
+            <strong id="exposure">--</strong>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <h2 id="selectedTitle">Select a seating area</h2>
+          <div class="shade-bar" aria-hidden="true"><div id="selectedBar"></div></div>
+          <p id="selectedNote" class="note">Tap a 3D seating tier to inspect its current shade estimate.</p>
+        </div>
+
+        <div class="ranked">
+          <h2>Most shaded areas</h2>
+          <ol id="topList" class="ranking"></ol>
+        </div>
+
+        <p class="note">This is a planning model, not a guarantee. Score can shift with exact row, overhang, clouds, concourse openings, and stadium operations.</p>
+      </aside>
+    </main>
+  </div>
+
+  <script src="./vendor/three.min.js"></script>
+  <script src="./vendor/meshopt_decoder.js"></script>
+  <script src="./vendor/GLTFLoader.js"></script>
+  <script>
+    const LA_TZ = "America/Los_Angeles";
+    const STADIUM = {
+      lat: 34.0739,
+      lon: -118.2400,
+      centerFieldBearing: 25
+    };
+
+    const dateInput = document.getElementById("dateInput");
+    const timeInput = document.getElementById("timeInput");
+    const timeRange = document.getElementById("timeRange");
+    const canvas = document.getElementById("scene");
+    const overallShade = document.getElementById("overallShade");
+    const summaryText = document.getElementById("summaryText");
+    const altitudeEl = document.getElementById("altitude");
+    const azimuthEl = document.getElementById("azimuth");
+    const bestSideEl = document.getElementById("bestSide");
+    const exposureEl = document.getElementById("exposure");
+    const selectedTitle = document.getElementById("selectedTitle");
+    const selectedNote = document.getElementById("selectedNote");
+    const selectedBar = document.getElementById("selectedBar");
+    const topList = document.getElementById("topList");
+    const hoverChip = document.getElementById("hoverChip");
+
+    const colors = {
+      sunny: new THREE.Color("#f4d25f"),
+      mixed: new THREE.Color("#e7904e"),
+      shade: new THREE.Color("#4b8fc0"),
+      deep: new THREE.Color("#235f95"),
+      concrete: new THREE.Color("#d6dde3"),
+      grass: new THREE.Color("#5faf63"),
+      dirt: new THREE.Color("#b98755"),
+      line: new THREE.Color("#f8f5ec")
+    };
+
+    const zones = [
+      zone("fld-3b-line", "3B Field Line", "Field", "third", -62, -35, 8.2, 14.3, 0.65, 0.6, 0.16, "Third-base field seats usually gain shade first during late afternoon."),
+      zone("fld-3b", "3B Field Infield", "Field", "third", -35, -13, 8.2, 14.3, 0.65, 0.6, 0.18, "Lower third-base infield seats are the first lower-bowl areas to improve as the sun moves west."),
+      zone("fld-home", "Home Plate Field", "Field", "home", -13, 13, 8.0, 14.5, 0.65, 0.6, 0.22, "Back rows near home plate benefit from deck shadow earlier than exposed front rows."),
+      zone("fld-1b", "1B Field Infield", "Field", "first", 13, 35, 8.2, 14.3, 0.65, 0.6, 0.11, "First-base field seats often stay brighter later in the day."),
+      zone("fld-1b-line", "1B Field Line", "Field", "first", 35, 62, 8.2, 14.3, 0.65, 0.6, 0.09, "Seats down the first-base line are among the sunniest for afternoon starts."),
+
+      zone("loge-3b-line", "3B Loge Line", "Loge", "third", -66, -38, 14.8, 21.1, 1.8, 1.0, 0.36, "Loge depth and the third-base orientation make this a strong shade candidate."),
+      zone("loge-3b", "3B Loge Infield", "Loge", "third", -38, -14, 14.8, 21.1, 1.8, 1.0, 0.38, "A reliable late-day shade area, especially in higher rows."),
+      zone("loge-home", "Home Plate Loge", "Loge", "home", -14, 14, 14.8, 21.4, 1.8, 1.0, 0.45, "Home-plate loge has one of the better shade profiles in the bowl."),
+      zone("loge-1b", "1B Loge Infield", "Loge", "first", 14, 38, 14.8, 21.1, 1.8, 1.0, 0.24, "Can be mixed; higher rows improve before lower rows."),
+      zone("loge-1b-line", "1B Loge Line", "Loge", "first", 38, 66, 14.8, 21.1, 1.8, 1.0, 0.20, "Usually more exposed than matching third-base loge seats."),
+
+      zone("res-3b-line", "3B Reserve Line", "Reserve", "third", -70, -40, 21.7, 29.0, 3.2, 1.35, 0.54, "Upper-deck structure and late-day angle make this a good shade target."),
+      zone("res-3b", "3B Reserve Infield", "Reserve", "third", -40, -14, 21.7, 29.0, 3.2, 1.35, 0.58, "Reserve seats here are often shaded sooner than the lower bowl."),
+      zone("res-home", "Home Plate Reserve", "Reserve", "home", -14, 14, 21.7, 29.4, 3.2, 1.35, 0.63, "One of the strongest shade zones, particularly away from the front edge."),
+      zone("res-1b", "1B Reserve Infield", "Reserve", "first", 14, 40, 21.7, 29.0, 3.2, 1.35, 0.37, "Mixed during afternoon starts; shade increases in higher rows."),
+      zone("res-1b-line", "1B Reserve Line", "Reserve", "first", 40, 70, 21.7, 29.0, 3.2, 1.35, 0.32, "Can remain bright when the sun is low in the west."),
+
+      zone("top-3b", "3B Top Deck", "Top Deck", "third", -56, -16, 30.0, 38.2, 4.9, 1.45, 0.42, "High elevation helps sightlines but exposed edges can still be sunny."),
+      zone("top-home", "Home Plate Top Deck", "Top Deck", "home", -16, 16, 30.0, 38.7, 4.9, 1.45, 0.48, "Good shade odds when the sun drops behind the stadium mass."),
+      zone("top-1b", "1B Top Deck", "Top Deck", "first", 16, 56, 30.0, 38.2, 4.9, 1.45, 0.30, "Late-afternoon sun can reach exposed first-base top-deck seats."),
+
+      zone("pav-left", "Left Field Pavilion", "Pavilion", "outfieldLeft", -108, -72, 20.0, 33.8, 1.4, 0.95, 0.11, "Outfield pavilion shade is limited until the sun gets very low."),
+      zone("pav-center", "Center Field Plaza", "Outfield", "outfield", -72, 72, 34.0, 41.8, 1.2, 0.75, 0.14, "Center-field areas are broad and exposed for most day-game hours."),
+      zone("pav-right", "Right Field Pavilion", "Pavilion", "outfieldRight", 72, 108, 20.0, 33.8, 1.4, 0.95, 0.08, "Right-field pavilion seats can be bright for afternoon and early evening starts.")
+    ];
+
+    let renderer;
+    let scene;
+    let camera;
+    let stadiumGroup;
+    let sunLight;
+    let sunMesh;
+    let sunRay;
+    let raycaster;
+    let pointer;
+    let hoveredMesh = null;
+    let selectedZoneId = "res-home";
+    let realModelGroup = null;
+    let realModelLoaded = false;
+    let showRealModel = true;
+    let sceneFog = null;
+    let cameraState = { theta: 0, phi: 0.7, radius: 120 };
+    let targetCameraState = { theta: 0, phi: 0.7, radius: 120 };
+    let dragState = null;
+
+    function zone(id, title, level, side, start, end, inner, outer, baseY, rise, cover, note) {
+      return { id, title, level, side, start, end, inner, outer, baseY, rise, cover, note, score: 0, mesh: null, material: null };
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function normalizeDegrees(deg) {
+      return ((deg % 360) + 360) % 360;
+    }
+
+    function signedAngleDiff(a, b) {
+      return ((a - b + 540) % 360) - 180;
+    }
+
+    function initScene() {
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color("#dce9f2");
+      scene.fog = new THREE.Fog("#dce9f2", 72, 140);
+      sceneFog = scene.fog;
+
+      camera = new THREE.PerspectiveCamera(42, 1, 0.1, 220);
+      raycaster = new THREE.Raycaster();
+      pointer = new THREE.Vector2();
+
+      stadiumGroup = new THREE.Group();
+      stadiumGroup.rotation.y = -0.04;
+      scene.add(stadiumGroup);
+
+      const hemi = new THREE.HemisphereLight("#eef7ff", "#7a6a55", 1.15);
+      scene.add(hemi);
+
+      sunLight = new THREE.DirectionalLight("#fff0c5", 2.2);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.left = -48;
+      sunLight.shadow.camera.right = 48;
+      sunLight.shadow.camera.top = 48;
+      sunLight.shadow.camera.bottom = -48;
+      sunLight.shadow.camera.near = 0.5;
+      sunLight.shadow.camera.far = 120;
+      scene.add(sunLight);
+      scene.add(sunLight.target);
+
+      buildField();
+      buildStadium();
+      buildDetails();
+      buildSunObjects();
+      wireSceneInteraction();
+      loadRealModel();
+      applyModelVisibility();
+      resizeRenderer();
+      animate();
+    }
+
+    function buildField() {
+      const outfield = makeFanGeometry(-64, 64, 3.2, 27, 0, 0.06);
+      const grassMat = new THREE.MeshStandardMaterial({ color: colors.grass, roughness: 0.92, metalness: 0 });
+      const grass = new THREE.Mesh(outfield, grassMat);
+      grass.receiveShadow = true;
+      stadiumGroup.add(grass);
+
+      const warning = makeFanGeometry(-68, 68, 27, 29.4, 0.02, 0.03);
+      const warningMat = new THREE.MeshStandardMaterial({ color: "#b98d5f", roughness: 0.9 });
+      const track = new THREE.Mesh(warning, warningMat);
+      track.receiveShadow = true;
+      stadiumGroup.add(track);
+
+      const diamondShape = new THREE.Shape();
+      diamondShape.moveTo(0, -0.4);
+      diamondShape.lineTo(-6.2, 6.2);
+      diamondShape.lineTo(0, 12.4);
+      diamondShape.lineTo(6.2, 6.2);
+      diamondShape.lineTo(0, -0.4);
+      const diamondGeo = new THREE.ShapeGeometry(diamondShape);
+      const diamond = new THREE.Mesh(diamondGeo, new THREE.MeshStandardMaterial({ color: colors.dirt, roughness: 0.88 }));
+      diamond.rotation.x = -Math.PI / 2;
+      diamond.position.y = 0.08;
+      diamond.receiveShadow = true;
+      stadiumGroup.add(diamond);
+
+      addLine(0, -0.2, -6.2, 6.2);
+      addLine(0, -0.2, 6.2, 6.2);
+      addLine(-6.2, 6.2, 0, 12.4);
+      addLine(6.2, 6.2, 0, 12.4);
+      addBase(0, -0.25);
+      addBase(-6.2, 6.2);
+      addBase(0, 12.4);
+      addBase(6.2, 6.2);
+    }
+
+    function addLine(x1, z1, x2, z2) {
+      const curve = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(x1, 0.15, z1),
+        new THREE.Vector3(x2, 0.15, z2)
+      ]);
+      const line = new THREE.Line(curve, new THREE.LineBasicMaterial({ color: colors.line }));
+      stadiumGroup.add(line);
+    }
+
+    function addBase(x, z) {
+      const base = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.38, 0.38, 0.08, 4),
+        new THREE.MeshStandardMaterial({ color: "#faf8ef", roughness: 0.5 })
+      );
+      base.position.set(x, 0.18, z);
+      base.rotation.y = Math.PI / 4;
+      base.castShadow = true;
+      base.receiveShadow = true;
+      stadiumGroup.add(base);
+    }
+
+    function buildStadium() {
+      zones.forEach((z) => {
+        const geometry = makeBowlSegmentGeometry(z.start, z.end, z.inner, z.outer, z.baseY, z.rise);
+        const material = new THREE.MeshStandardMaterial({
+          color: "#d6dde3",
+          roughness: 0.68,
+          metalness: 0.02,
+          side: THREE.DoubleSide
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData.zoneId = z.id;
+        z.mesh = mesh;
+        z.material = material;
+        stadiumGroup.add(mesh);
+
+        addAisleLines(z);
+      });
+
+      const wall = new THREE.Mesh(
+        makeFanGeometry(-112, 112, 41.9, 42.8, 0.2, 4.8),
+        new THREE.MeshStandardMaterial({ color: "#1f5f9d", roughness: 0.58 })
+      );
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+      stadiumGroup.add(wall);
+    }
+
+    function addAisleLines(z) {
+      const starts = [z.start, z.end];
+      starts.forEach((angle) => {
+        const inner = fanPoint(z.inner, angle, z.baseY + 0.04);
+        const outer = fanPoint(z.outer, angle, z.baseY + z.rise + 0.08);
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(inner.x, inner.y, inner.z),
+          new THREE.Vector3(outer.x, outer.y, outer.z)
+        ]);
+        const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: "#f7fbff", transparent: true, opacity: 0.55 }));
+        stadiumGroup.add(line);
+      });
+    }
+
+    function buildDetails() {
+      const scoreboard = new THREE.Mesh(
+        new THREE.BoxGeometry(8.5, 3.8, 0.5),
+        new THREE.MeshStandardMaterial({ color: "#17395c", roughness: 0.45 })
+      );
+      scoreboard.position.set(0, 5.8, 43.2);
+      scoreboard.castShadow = true;
+      stadiumGroup.add(scoreboard);
+
+      const boardFace = new THREE.Mesh(
+        new THREE.BoxGeometry(7.5, 2.65, 0.08),
+        new THREE.MeshStandardMaterial({ color: "#2269a6", roughness: 0.35, emissive: "#0a2744", emissiveIntensity: 0.18 })
+      );
+      boardFace.position.set(0, 5.8, 42.9);
+      stadiumGroup.add(boardFace);
+
+      for (let i = 0; i < 6; i += 1) {
+        const x = -24 + i * 9.6;
+        const pole = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.12, 0.18, 10, 10),
+          new THREE.MeshStandardMaterial({ color: "#d8dde2", roughness: 0.35 })
+        );
+        pole.position.set(x, 5.2, 35 + Math.abs(i - 2.5) * 1.3);
+        pole.castShadow = true;
+        stadiumGroup.add(pole);
+
+        const lights = new THREE.Mesh(
+          new THREE.BoxGeometry(2.8, 0.65, 0.45),
+          new THREE.MeshStandardMaterial({ color: "#f3f5ee", emissive: "#fff2b0", emissiveIntensity: 0.25, roughness: 0.2 })
+        );
+        lights.position.set(x, 10.4, 35 + Math.abs(i - 2.5) * 1.3);
+        stadiumGroup.add(lights);
+      }
+    }
+
+    function buildSunObjects() {
+      sunMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(1.5, 24, 16),
+        new THREE.MeshBasicMaterial({ color: "#f6b842" })
+      );
+      scene.add(sunMesh);
+
+      const rayMat = new THREE.LineBasicMaterial({ color: "#b56a00", transparent: true, opacity: 0.95 });
+      sunRay = new THREE.Line(new THREE.BufferGeometry(), rayMat);
+      scene.add(sunRay);
+    }
+
+    function makeFanGeometry(start, end, inner, outer, y, rise) {
+      return makeBowlSegmentGeometry(start, end, inner, outer, y, rise, true);
+    }
+
+    function makeBowlSegmentGeometry(start, end, inner, outer, baseY, rise, flat) {
+      const steps = Math.max(8, Math.ceil(Math.abs(end - start) / 4));
+      const vertices = [];
+      const indices = [];
+
+      for (let i = 0; i <= steps; i += 1) {
+        const angle = lerp(start, end, i / steps);
+        const a = angle * Math.PI / 180;
+        const innerY = baseY;
+        const outerY = flat ? baseY + rise : baseY + rise;
+        vertices.push(Math.sin(a) * inner, innerY, Math.cos(a) * inner);
+        vertices.push(Math.sin(a) * outer, outerY, Math.cos(a) * outer);
+        vertices.push(Math.sin(a) * inner, Math.max(0, baseY - 0.28), Math.cos(a) * inner);
+        vertices.push(Math.sin(a) * outer, Math.max(0, baseY - 0.28), Math.cos(a) * outer);
+      }
+
+      for (let i = 0; i < steps; i += 1) {
+        const a = i * 4;
+        const b = a + 4;
+        indices.push(a, b, a + 1, b, b + 1, a + 1);
+        indices.push(a + 2, a, b + 2, b + 2, a, b);
+        indices.push(a + 1, b + 1, a + 3, a + 3, b + 1, b + 3);
+      }
+
+      const startBase = 0;
+      const endBase = steps * 4;
+      indices.push(startBase, startBase + 1, startBase + 2, startBase + 2, startBase + 1, startBase + 3);
+      indices.push(endBase, endBase + 2, endBase + 1, endBase + 1, endBase + 2, endBase + 3);
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
+    function fanPoint(radius, angle, y) {
+      const a = angle * Math.PI / 180;
+      return { x: Math.sin(a) * radius, y, z: Math.cos(a) * radius };
+    }
+
+    function wireSceneInteraction() {
+      canvas.addEventListener("pointerdown", (event) => {
+        dragState = {
+          x: event.clientX,
+          y: event.clientY,
+          theta: targetCameraState.theta,
+          phi: targetCameraState.phi
+        };
+        canvas.setPointerCapture(event.pointerId);
+      });
+
+      canvas.addEventListener("pointermove", (event) => {
+        updatePointer(event);
+        if (dragState) {
+          const dx = event.clientX - dragState.x;
+          const dy = event.clientY - dragState.y;
+          targetCameraState.theta = dragState.theta - dx * 0.008;
+          targetCameraState.phi = clamp(dragState.phi + dy * 0.006, 0.42, 1.35);
+        }
+      });
+
+      canvas.addEventListener("pointerup", (event) => {
+        if (!dragState) return;
+        const moved = Math.abs(event.clientX - dragState.x) + Math.abs(event.clientY - dragState.y);
+        dragState = null;
+        canvas.releasePointerCapture(event.pointerId);
+        if (moved < 8) pickSection(event);
+      });
+
+      canvas.addEventListener("pointerleave", () => {
+        hoveredMesh = null;
+        hoverChip.classList.remove("visible");
+      });
+
+      canvas.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        targetCameraState.radius = clamp(targetCameraState.radius + event.deltaY * 0.035, 38, 130);
+      }, { passive: false });
+
+      document.querySelectorAll("[data-view]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const view = button.dataset.view;
+          if (view === "top") targetCameraState = { theta: 0, phi: 0.14, radius: 130 };
+          if (view === "low") targetCameraState = { theta: -0.45, phi: 0.92, radius: 110 };
+          if (view === "reset") targetCameraState = { theta: 0, phi: 0.7, radius: 120 };
+        });
+      });
+
+      window.addEventListener("resize", resizeRenderer);
+    }
+
+    function updatePointer(event) {
+      if (showRealModel) {
+        hoveredMesh = null;
+        hoverChip.classList.remove("visible");
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(zones.map((z) => z.mesh).filter(Boolean), false);
+      hoveredMesh = hits[0] ? hits[0].object : null;
+      if (hoveredMesh) {
+        const z = zones.find((item) => item.id === hoveredMesh.userData.zoneId);
+        hoverChip.innerHTML = `<strong>${z.title}</strong><br>${Math.round(z.score * 100)}% shaded`;
+        hoverChip.classList.add("visible");
+      } else {
+        hoverChip.classList.remove("visible");
+      }
+    }
+
+    function pickSection(event) {
+      updatePointer(event);
+      if (hoveredMesh) setSelected(hoveredMesh.userData.zoneId);
+    }
+
+    function applyModelVisibility() {
+      if (stadiumGroup) stadiumGroup.visible = !showRealModel;
+      if (realModelGroup) realModelGroup.visible = showRealModel;
+      if (scene) scene.fog = showRealModel ? null : sceneFog;
+    }
+
+    function loadRealModel() {
+      if (realModelLoaded || typeof THREE.GLTFLoader === "undefined") return;
+      realModelLoaded = true;
+      const loader = new THREE.GLTFLoader();
+      if (typeof MeshoptDecoder !== "undefined") {
+        loader.setMeshoptDecoder(MeshoptDecoder);
+      }
+      loader.load(
+        "./models/dodger-stadium.glb",
+        (gltf) => {
+          const model = gltf.scene;
+          const box = new THREE.Box3().setFromObject(model);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+          const maxXZ = Math.max(size.x, size.z) || 1;
+          const scale = 90 / maxXZ;
+          model.scale.setScalar(scale);
+          model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+          model.traverse((obj) => {
+            if (obj.isMesh) {
+              obj.castShadow = true;
+              obj.receiveShadow = true;
+              if (obj.material) obj.material.side = THREE.DoubleSide;
+            }
+          });
+          realModelGroup = new THREE.Group();
+          realModelGroup.add(model);
+          scene.add(realModelGroup);
+          applyModelVisibility();
+        },
+        undefined,
+        (err) => {
+          console.error("Failed to load stadium model:", err);
+          realModelLoaded = false;
+          showRealModel = false;
+          applyModelVisibility();
+          const toggle = document.getElementById("modelToggle");
+          if (toggle) {
+            toggle.textContent = "Model unavailable";
+            toggle.disabled = true;
+            toggle.title = "Could not load ./models/dodger-stadium.glb. Serve this page from a local web server (file:// blocks model loading).";
+          }
+        }
+      );
+    }
+
+    function resizeRenderer() {
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width));
+      const height = Math.max(1, Math.round(rect.height));
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      cameraState.theta = lerp(cameraState.theta, targetCameraState.theta, 0.12);
+      cameraState.phi = lerp(cameraState.phi, targetCameraState.phi, 0.12);
+      cameraState.radius = lerp(cameraState.radius, targetCameraState.radius, 0.12);
+
+      const x = Math.sin(cameraState.theta) * Math.sin(cameraState.phi) * cameraState.radius;
+      const y = Math.cos(cameraState.phi) * cameraState.radius + 5;
+      const z = -Math.cos(cameraState.theta) * Math.sin(cameraState.phi) * cameraState.radius + 18;
+      camera.position.set(x, y, z);
+      camera.lookAt(0, 2.2, 16);
+      updateCompass();
+      renderer.render(scene, camera);
+    }
+
+    const _compassO = new THREE.Vector3();
+    const _compassN = new THREE.Vector3();
+    const _compassTarget = new THREE.Vector3(0, 2.2, 16);
+    const _compassDir = new THREE.Vector3();
+    function updateCompass() {
+      const dial = document.getElementById("compassDial");
+      if (!dial || !camera) return;
+      // North direction in scene space, using the same convention as the sun
+      const d = signedAngleDiff(0, STADIUM.centerFieldBearing) * Math.PI / 180;
+      _compassDir.set(Math.sin(d), 0, Math.cos(d));
+      _compassO.copy(_compassTarget).project(camera);
+      _compassN.copy(_compassTarget).addScaledVector(_compassDir, 10).project(camera);
+      const dx = _compassN.x - _compassO.x;
+      const dy = _compassN.y - _compassO.y;
+      const angle = Math.atan2(dx, dy) * 180 / Math.PI;
+      dial.style.transform = `rotate(${angle}deg)`;
+    }
+
+    function colorForScore(score, altitude) {
+      if (altitude <= -1) return colors.deep.clone();
+      if (score < 0.33) return colors.sunny.clone().lerp(colors.mixed, score / 0.33);
+      if (score < 0.66) return colors.mixed.clone().lerp(colors.shade, (score - 0.33) / 0.33);
+      return colors.shade.clone().lerp(colors.deep, (score - 0.66) / 0.34);
+    }
+
+    function shadeScore(zoneData, sun) {
+      if (sun.altitude <= -1) return 1;
+      const alt = sun.altitude;
+      const az = sun.azimuth;
+      const west = directionalStrength(az, 270, 75);
+      const southwest = directionalStrength(az, 235, 65);
+      const south = directionalStrength(az, 180, 70);
+      const east = directionalStrength(az, 90, 75);
+      const lowSun = clamp((28 - alt) / 24, 0, 1);
+      const highSunPenalty = clamp((alt - 48) / 26, 0, 1);
+      const lateShade = Math.max(west, southwest * 0.8) * lowSun;
+
+      if (alt < 3) {
+        let duskScore = 0.68 + zoneData.cover * 0.35 + lowSun * 0.1;
+        if (zoneData.side === "third") duskScore += west * 0.08;
+        if (zoneData.side === "home") duskScore += zoneData.cover * 0.08;
+        if (zoneData.side === "first") duskScore -= west * 0.08;
+        if (zoneData.side === "outfieldRight") duskScore -= west * 0.1;
+        if (zoneData.level === "Reserve") duskScore += 0.04;
+        if (zoneData.level === "Pavilion") duskScore -= 0.05;
+        return clamp(duskScore, 0.62, 0.98);
+      }
+
+      let score = 0.05 + zoneData.cover * (0.75 + lowSun * 0.55) - highSunPenalty * 0.18;
+      if (zoneData.side === "third") score += lateShade * 0.52 + west * 0.16 - east * 0.18;
+      else if (zoneData.side === "home") score += lateShade * 0.38 + south * 0.12 + zoneData.cover * 0.16;
+      else if (zoneData.side === "first") score += east * 0.22 + south * 0.04 - west * 0.22 - southwest * 0.14;
+      else if (zoneData.side === "outfieldLeft") score += west * lowSun * 0.28 - south * 0.08;
+      else if (zoneData.side === "outfieldRight") score += east * lowSun * 0.18 - west * 0.20 - south * 0.07;
+      else score += lowSun * 0.12 - south * 0.10;
+
+      if (zoneData.level === "Reserve") score += lowSun * 0.12;
+      if (zoneData.level === "Loge") score += lowSun * 0.08;
+      if (zoneData.level === "Field") score -= highSunPenalty * 0.08;
+      if (zoneData.level === "Pavilion") score -= 0.08;
+      return clamp(score, 0.02, 0.98);
+    }
+
+    function directionalStrength(azimuth, target, width) {
+      const diff = Math.abs(signedAngleDiff(azimuth, target));
+      return clamp(1 - diff / width, 0, 1);
+    }
+
+    function getSunPosition(date, lat, lon) {
+      const rad = Math.PI / 180;
+      const julian = date.valueOf() / 86400000 - 0.5 + 2440588;
+      const n = julian - 2451545;
+      const meanAnomaly = rad * normalizeDegrees(357.5291 + 0.98560028 * n);
+      const eclipticLongitude = rad * normalizeDegrees(
+        280.4665 + 0.98564736 * n +
+        1.9148 * Math.sin(meanAnomaly) +
+        0.0200 * Math.sin(2 * meanAnomaly) +
+        0.0003 * Math.sin(3 * meanAnomaly)
+      );
+      const obliquity = rad * (23.4393 - 0.00000036 * n);
+      const rightAscension = Math.atan2(Math.cos(obliquity) * Math.sin(eclipticLongitude), Math.cos(eclipticLongitude));
+      const declination = Math.asin(Math.sin(obliquity) * Math.sin(eclipticLongitude));
+      const sidereal = rad * (280.16 + 360.9856235 * n) + lon * rad;
+      const hourAngle = sidereal - rightAscension;
+      const phi = lat * rad;
+      const altitude = Math.asin(
+        Math.sin(phi) * Math.sin(declination) +
+        Math.cos(phi) * Math.cos(declination) * Math.cos(hourAngle)
+      );
+      const azimuthFromSouth = Math.atan2(
+        Math.sin(hourAngle),
+        Math.cos(hourAngle) * Math.sin(phi) - Math.tan(declination) * Math.cos(phi)
+      );
+      return { altitude: altitude / rad, azimuth: normalizeDegrees(azimuthFromSouth / rad + 180) };
+    }
+
+    function zonedDateToUtc(dateValue, timeValue) {
+      const parts = dateValue.split("-").map(Number);
+      const time = timeValue.split(":").map(Number);
+      const year = parts[0];
+      const month = parts[1];
+      const day = parts[2];
+      const hour = time[0];
+      const minute = time[1] || 0;
+      let utc = Date.UTC(year, month - 1, day, hour, minute, 0);
+
+      for (let i = 0; i < 3; i += 1) {
+        const local = getZonedParts(new Date(utc));
+        const asIfUtc = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute, 0);
+        const targetAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
+        utc -= asIfUtc - targetAsUtc;
+      }
+      return new Date(utc);
+    }
+
+    function getZonedParts(date) {
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: LA_TZ,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23"
+      });
+      const parts = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
+      return {
+        year: Number(parts.year),
+        month: Number(parts.month),
+        day: Number(parts.day),
+        hour: Number(parts.hour),
+        minute: Number(parts.minute)
+      };
+    }
+
+    function formatDateInput(parts) {
+      return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+    }
+
+    function formatTimeInput(parts) {
+      return `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
+    }
+
+    function minutesToTime(minutes) {
+      const hour = Math.floor(minutes / 60);
+      const minute = minutes % 60;
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+
+    function timeToMinutes(timeValue) {
+      const time = timeValue.split(":").map(Number);
+      return time[0] * 60 + (time[1] || 0);
+    }
+
+    function setSelected(id) {
+      selectedZoneId = id;
+      zones.forEach((z) => {
+        if (!z.mesh) return;
+        z.mesh.scale.y = z.id === id ? 1.08 : 1;
+      });
+      updateSelectedPanel();
+    }
+
+    function updateSelectedPanel() {
+      const z = zones.find((item) => item.id === selectedZoneId) || zones[0];
+      selectedTitle.textContent = `${z.title}: ${Math.round(z.score * 100)}% shaded`;
+      selectedBar.style.width = `${Math.round(z.score * 100)}%`;
+      selectedNote.textContent = `${z.note} Current estimate: ${describeScore(z.score).toLowerCase()}.`;
+    }
+
+    function describeScore(score) {
+      if (score >= 0.78) return "Mostly shaded";
+      if (score >= 0.55) return "Shaded";
+      if (score >= 0.35) return "Mixed sun and shade";
+      return "Mostly sunny";
+    }
+
+    function updateSun(sun) {
+      const delta = signedAngleDiff(sun.azimuth, STADIUM.centerFieldBearing) * Math.PI / 180;
+      const altitude = Math.max(sun.altitude, -3) * Math.PI / 180;
+      const distance = 58;
+      const horizontal = Math.cos(altitude) * distance;
+      const sunPos = new THREE.Vector3(
+        Math.sin(delta) * horizontal,
+        Math.sin(altitude) * distance + 2,
+        Math.cos(delta) * horizontal + 8
+      );
+      sunMesh.position.copy(sunPos);
+      sunMesh.visible = sun.altitude > -6;
+      sunLight.position.copy(sunPos);
+      sunLight.target.position.set(0, 1.2, 14);
+      sunLight.intensity = sun.altitude <= -1 ? 0.35 : lerp(0.65, 2.5, clamp(sun.altitude / 55, 0, 1));
+
+      const rayGeo = new THREE.BufferGeometry().setFromPoints([
+        sunPos,
+        new THREE.Vector3(0, 1.2, 14)
+      ]);
+      sunRay.geometry.dispose();
+      sunRay.geometry = rayGeo;
+      sunRay.visible = sun.altitude > -4;
+      sunRay.material.opacity = sun.altitude <= 3 ? 0.6 : 0.95;
+    }
+
+    function updateTopList() {
+      topList.innerHTML = "";
+      zones
+        .slice()
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .forEach((z) => {
+          const li = document.createElement("li");
+          const name = document.createElement("b");
+          name.textContent = z.title;
+          const score = document.createElement("span");
+          score.className = "pill";
+          score.style.background = `#${colorForScore(z.score, 10).getHexString()}`;
+          score.textContent = `${Math.round(z.score * 100)}%`;
+          li.append(name, score);
+          topList.appendChild(li);
+        });
+    }
+
+    function bestSideForSun(azimuth, altitude) {
+      if (altitude <= 3) return "Most areas";
+      if (directionalStrength(azimuth, 270, 80) > 0.4) return "3B / Home";
+      if (directionalStrength(azimuth, 180, 75) > 0.45) return "Home";
+      if (directionalStrength(azimuth, 90, 80) > 0.45) return "1B upper";
+      return "Upper rows";
+    }
+
+    function describeExposure(overall, altitude) {
+      if (altitude <= -1) return "Dark";
+      if (overall > 0.68) return "Low sun";
+      if (overall > 0.45) return "Mixed";
+      return "Bright";
+    }
+
+    function updateApp() {
+      const utcDate = zonedDateToUtc(dateInput.value, timeInput.value);
+      const sun = getSunPosition(utcDate, STADIUM.lat, STADIUM.lon);
+      let weightedTotal = 0;
+      let weightTotal = 0;
+
+      zones.forEach((z) => {
+        z.score = shadeScore(z, sun);
+        const color = colorForScore(z.score, sun.altitude);
+        z.material.color.copy(color);
+        z.material.emissive = color.clone().multiplyScalar(sun.altitude <= -1 ? 0.12 : 0.03);
+        const areaWeight = (z.outer - z.inner) * Math.abs(z.end - z.start);
+        weightedTotal += z.score * areaWeight;
+        weightTotal += areaWeight;
+      });
+
+      const overall = weightedTotal / weightTotal;
+      overallShade.textContent = `${Math.round(overall * 100)}%`;
+      summaryText.textContent = sun.altitude <= -1 ? "after sunset or stadium light conditions" : "estimated shaded seating";
+      altitudeEl.textContent = `${sun.altitude.toFixed(1)} deg`;
+      azimuthEl.textContent = `${Math.round(sun.azimuth)} deg`;
+      bestSideEl.textContent = bestSideForSun(sun.azimuth, sun.altitude);
+      exposureEl.textContent = describeExposure(overall, sun.altitude);
+
+      updateSun(sun);
+      updateSelectedPanel();
+      updateTopList();
+    }
+
+    function setInitialDateTime() {
+      const nowParts = getZonedParts(new Date());
+      dateInput.value = formatDateInput(nowParts);
+      const rounded = Math.round((nowParts.hour * 60 + nowParts.minute) / 15) * 15;
+      const clamped = clamp(rounded, Number(timeRange.min), Number(timeRange.max));
+      timeInput.value = minutesToTime(clamped);
+      timeRange.value = clamped;
+    }
+
+    initScene();
+    setInitialDateTime();
+    setSelected(selectedZoneId);
+    updateApp();
+
+    dateInput.addEventListener("input", updateApp);
+    timeInput.addEventListener("input", () => {
+      timeRange.value = clamp(timeToMinutes(timeInput.value), Number(timeRange.min), Number(timeRange.max));
+      updateApp();
+    });
+    timeRange.addEventListener("input", () => {
+      timeInput.value = minutesToTime(Number(timeRange.value));
+      updateApp();
+    });
+    document.querySelectorAll("[data-time]").forEach((button) => {
+      button.addEventListener("click", () => {
+        timeInput.value = button.dataset.time;
+        timeRange.value = timeToMinutes(button.dataset.time);
+        updateApp();
+      });
+    });
+    document.getElementById("todayBtn").addEventListener("click", () => {
+      const parts = getZonedParts(new Date());
+      dateInput.value = formatDateInput(parts);
+      updateApp();
+    });
+    document.getElementById("summerBtn").addEventListener("click", () => {
+      dateInput.value = "2026-07-15";
+      updateApp();
+    });
+  </script>
+</body>
+</html>

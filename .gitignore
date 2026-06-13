@@ -1,0 +1,14 @@
+# Build artifacts, caches, and tooling (1.5 GB) — not needed to run the app
+work/
+
+# Leftover per-part model exports (~377 MB). The app only uses dodger-stadium.glb
+outputs/models/model_*.glb
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
+
+# Local backups
+*backup*/
+*.zip
