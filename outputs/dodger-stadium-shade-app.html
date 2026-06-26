@@ -1256,16 +1256,17 @@
     // The model is a single textured mesh with no per-section data, so labels are
     // authored and placed by angle/height around the bowl using Dodger Stadium's
     // real level/number ranges. Positions are representative approximations.
-    // Bowl is centered at origin; home plate is toward -Z, center field +Z.
-    // rx/rz form an ellipse matched to the bowl; zc nudges the ring toward the
-    // outfield so the behind-home labels sit on the lower seating, not the lot.
+    // Bowl is centered near origin; home plate is toward -Z, center field +Z.
+    // Each level is an offset ellipse (rx wide, rz deep, centered at z = zc)
+    // tuned against the real bowl so labels sit on the seating tiers rather than
+    // on the field or out in the parking lots. Calibrated empirically in-browser.
     const SECTION_LEVELS = [
-      { level: "Field Level",   prefix: "",    start: 1,   end: 53,  count: 9, rx: 25, rz: 21, zc: 6, height: 3.0,  rows: "A-N", bg: "#1e5ea8" },
-      { level: "Loge Level",    prefix: "",    start: 101, end: 168, count: 9, rx: 30, rz: 25, zc: 5, height: 7.0,  rows: "A-L", bg: "#0e1c2a" },
-      { level: "Reserve Level", prefix: "",    start: 1,   end: 57,  count: 9, rx: 35, rz: 29, zc: 4, height: 11.0, rows: "A-S", bg: "#0e1c2a" },
-      { level: "Top Deck",      prefix: "TD ", start: 1,   end: 13,  count: 7, rx: 40, rz: 33, zc: 3, height: 15.5, rows: "A-U", bg: "#235f95" }
+      { level: "Field Level",   prefix: "",    start: 1,   end: 53,  count: 9, rx: 25, rz: 25, zc: -2, height: 4.0,  rows: "A-N", bg: "#1e5ea8" },
+      { level: "Loge Level",    prefix: "",    start: 101, end: 168, count: 9, rx: 30, rz: 26, zc: -1, height: 8.0,  rows: "A-L", bg: "#0e1c2a" },
+      { level: "Reserve Level", prefix: "",    start: 1,   end: 57,  count: 9, rx: 35, rz: 28, zc: -1, height: 12.0, rows: "A-S", bg: "#0e1c2a" },
+      { level: "Top Deck",      prefix: "TD ", start: 1,   end: 13,  count: 7, rx: 40, rz: 30, zc: 0,  height: 17.0, rows: "A-U", bg: "#235f95" }
     ];
-    const SECTION_ARC = 210 * Math.PI / 180; // horseshoe sweep around home plate
+    const SECTION_ARC = 232 * Math.PI / 180; // horseshoe sweep around home plate
 
     function makeTextSprite(text, bg) {
       const dpr = 2;
