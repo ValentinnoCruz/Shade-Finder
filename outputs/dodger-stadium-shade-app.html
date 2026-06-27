@@ -129,6 +129,51 @@
       margin-top: 5px;
     }
 
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .stadium-picker select {
+      height: 38px;
+      padding: 0 32px 0 12px;
+      border: 1px solid var(--button-border);
+      background: var(--surface-button);
+      color: var(--ink);
+      border-radius: 999px;
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23888' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      transition: border-color 160ms ease;
+    }
+
+    .stadium-picker select:hover,
+    .stadium-picker select:focus-visible {
+      border-color: var(--button-border-hover);
+      outline: none;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     .summary {
       display: flex;
       align-items: baseline;
@@ -562,13 +607,22 @@
   <div class="app">
     <header>
       <div>
-        <h1>Dodger Stadium 3D Shade Map</h1>
-        <div class="subhead">Interactive shade estimate for Los Angeles time.</div>
+        <h1 id="appTitle">Dodger Stadium 3D Shade Map</h1>
+        <div class="subhead" id="appSubhead">Interactive shade estimate for Los Angeles (Pacific time).</div>
       </div>
-      <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="false" title="Toggle dark mode">
-        <span class="theme-toggle-icon" aria-hidden="true"></span>
-        <span class="theme-toggle-label">Dark</span>
-      </button>
+      <div class="header-controls">
+        <label class="stadium-picker">
+          <span class="sr-only">Stadium</span>
+          <select id="stadiumSelect" aria-label="Choose stadium">
+            <option value="dodger">Dodger Stadium — Los Angeles</option>
+            <option value="petco">Petco Park — San Diego</option>
+          </select>
+        </label>
+        <button type="button" id="themeToggle" class="theme-toggle" aria-pressed="false" title="Toggle dark mode">
+          <span class="theme-toggle-icon" aria-hidden="true"></span>
+          <span class="theme-toggle-label">Dark</span>
+        </button>
+      </div>
       <div class="summary" aria-live="polite">
         <strong id="overallShade">--%</strong>
         <span id="summaryText">estimated shaded seating</span>
@@ -667,12 +721,34 @@
   <script src="./vendor/meshopt_decoder.js"></script>
   <script src="./vendor/GLTFLoader.js"></script>
   <script>
-    const LA_TZ = "America/Los_Angeles";
-    const STADIUM = {
-      lat: 34.0739,
-      lon: -118.2400,
-      centerFieldBearing: 25
-    };
+    // Each stadium carries everything the viewer needs: model path, location for
+    // the sun math, and centerFieldBearing (home-plate -> center-field compass
+    // heading) so shade/compass orient correctly for that park.
+    const STADIUMS = [
+      {
+        id: "dodger",
+        name: "Dodger Stadium",
+        city: "Los Angeles",
+        model: "./models/dodger-stadium.glb",
+        tz: "America/Los_Angeles",
+        lat: 34.0739,
+        lon: -118.2400,
+        centerFieldBearing: 25,
+        modelWidth: 90
+      },
+      {
+        id: "petco",
+        name: "Petco Park",
+        city: "San Diego",
+        model: "./models/petco-park.glb",
+        tz: "America/Los_Angeles",
+        lat: 32.7073,
+        lon: -117.1566,
+        centerFieldBearing: 0, // Petco's batter faces due north
+        modelWidth: 90
+      }
+    ];
+    let STADIUM = STADIUMS[0];
 
     const dateInput = document.getElementById("dateInput");
     const timeInput = document.getElementById("timeInput");
@@ -1097,8 +1173,10 @@
       if (typeof MeshoptDecoder !== "undefined") {
         loader.setMeshoptDecoder(MeshoptDecoder);
       }
+      const modelPath = STADIUM.model;
+      const targetWidth = STADIUM.modelWidth || 90;
       loader.load(
-        "./models/dodger-stadium.glb",
+        modelPath,
         (gltf) => {
           const model = gltf.scene;
           const box = new THREE.Box3().setFromObject(model);
@@ -1107,7 +1185,7 @@
           box.getSize(size);
           box.getCenter(center);
           const maxXZ = Math.max(size.x, size.z) || 1;
-          const scale = 90 / maxXZ;
+          const scale = targetWidth / maxXZ;
           model.scale.setScalar(scale);
           model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
           model.traverse((obj) => {
@@ -1132,10 +1210,46 @@
           if (toggle) {
             toggle.textContent = "Model unavailable";
             toggle.disabled = true;
-            toggle.title = "Could not load ./models/dodger-stadium.glb. Serve this page from a local web server (file:// blocks model loading).";
+            toggle.title = "Could not load " + modelPath + ". Serve this page from a local web server (file:// blocks model loading).";
           }
         }
       );
+    }
+
+    function disposeRealModel() {
+      if (!realModelGroup) return;
+      realModelGroup.traverse((obj) => {
+        if (!obj.isMesh) return;
+        if (obj.geometry) obj.geometry.dispose();
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach((m) => {
+          if (!m) return;
+          if (m.map) m.map.dispose();
+          m.dispose();
+        });
+      });
+      scene.remove(realModelGroup);
+      realModelGroup = null;
+    }
+
+    function switchStadium(id) {
+      const next = STADIUMS.find((s) => s.id === id);
+      if (!next || next.id === STADIUM.id) return;
+      STADIUM = next;
+
+      const titleText = `${STADIUM.name} 3D Shade Map`;
+      document.title = titleText;
+      const h1 = document.getElementById("appTitle");
+      if (h1) h1.textContent = titleText;
+      const subhead = document.getElementById("appSubhead");
+      if (subhead) subhead.textContent = `Interactive shade estimate for ${STADIUM.city} (Pacific time).`;
+
+      // Swap the 3D model, then re-frame and recompute sun/shade for the new park.
+      disposeRealModel();
+      realModelLoaded = false;
+      loadRealModel();
+      targetCameraState = { theta: 0, phi: 0.7, radius: 120 };
+      updateApp();
     }
 
     function resizeRenderer() {
@@ -1279,7 +1393,7 @@
 
     function getZonedParts(date) {
       const formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: LA_TZ,
+        timeZone: STADIUM.tz,
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -1483,6 +1597,12 @@
         applyTheme(next);
         try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* storage blocked */ }
       });
+    }
+
+    const stadiumSelect = document.getElementById("stadiumSelect");
+    if (stadiumSelect) {
+      stadiumSelect.value = STADIUM.id;
+      stadiumSelect.addEventListener("change", () => switchStadium(stadiumSelect.value));
     }
 
     if (window.matchMedia) {

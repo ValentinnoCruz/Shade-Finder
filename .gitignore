@@ -4,6 +4,9 @@ work/
 # Leftover per-part model exports (~377 MB). The app only uses dodger-stadium.glb
 outputs/models/model_*.glb
 
+# Raw/unoptimized stadium model sources — only the optimized *.glb are committed
+outputs/models/Stadium_*.glb
+
 # OS / editor noise
 .DS_Store
 Thumbs.db
