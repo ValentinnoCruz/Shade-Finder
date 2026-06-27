@@ -374,71 +374,6 @@
       transform: translateY(0);
     }
 
-    .view-tools button[aria-pressed="true"] {
-      background: var(--blue);
-      color: #fff;
-      border-color: var(--blue);
-    }
-
-    .section-popup {
-      position: absolute;
-      z-index: 3;
-      max-width: 240px;
-      background: var(--glass);
-      border: 1px solid var(--glass-border);
-      color: var(--ink);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-size: 0.85rem;
-      line-height: 1.4;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-      pointer-events: none;
-      opacity: 0;
-      transform: translateY(-4px);
-      transition: opacity 140ms ease, transform 140ms ease;
-    }
-
-    .section-popup.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .section-popup .sp-title {
-      font-weight: 800;
-      font-size: 0.95rem;
-      margin-bottom: 2px;
-    }
-
-    .section-popup .sp-level {
-      color: var(--muted);
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 0.7rem;
-      letter-spacing: 0.04em;
-      margin-bottom: 6px;
-    }
-
-    .section-popup .sp-rows {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-    }
-
-    .section-popup .sp-row {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 20px;
-      height: 20px;
-      padding: 0 4px;
-      border-radius: 4px;
-      background: var(--surface-button);
-      border: 1px solid var(--button-border);
-      font-size: 0.72rem;
-      font-weight: 700;
-    }
-
     .side-panel {
       padding: 16px;
       display: grid;
@@ -672,10 +607,8 @@
             <button type="button" data-view="reset">Reset</button>
             <button type="button" data-view="top">Top</button>
             <button type="button" data-view="low">Low</button>
-            <button type="button" id="labelsToggle" aria-pressed="true">Labels</button>
           </div>
           <div id="hoverChip" class="hover-chip"></div>
-          <div id="sectionPopup" class="section-popup" role="dialog" aria-live="polite"></div>
           <div class="compass" id="compass" aria-hidden="true">
             <div class="compass-dial" id="compassDial">
               <span class="compass-n">N</span>
@@ -811,8 +744,6 @@
     let realModelLoaded = false;
     let showRealModel = true;
     let sceneFog = null;
-    let labelGroup = null;
-    let showLabels = true;
     let cameraState = { theta: 0, phi: 0.7, radius: 120 };
     let targetCameraState = { theta: 0, phi: 0.7, radius: 120 };
     let dragState = null;
@@ -1124,15 +1055,6 @@
         });
       });
 
-      const labelsToggle = document.getElementById("labelsToggle");
-      if (labelsToggle) {
-        labelsToggle.addEventListener("click", () => {
-          showLabels = !showLabels;
-          labelsToggle.setAttribute("aria-pressed", String(showLabels));
-          applyLabelVisibility();
-        });
-      }
-
       window.addEventListener("resize", resizeRenderer);
     }
 
@@ -1158,31 +1080,6 @@
     }
 
     function pickSection(event) {
-      if (showRealModel) {
-        if (!showLabels || !labelGroup) { hideSectionPopup(); return; }
-        // Sprite raycasting is unreliable for billboards, so use screen-space
-        // proximity: project each label and pick the closest to the click.
-        const rect = canvas.getBoundingClientRect();
-        const cx = event.clientX - rect.left;
-        const cy = event.clientY - rect.top;
-        const v = new THREE.Vector3();
-        let best = null;
-        let bestDist = 26; // px hit radius
-        labelGroup.children.forEach((spr) => {
-          v.copy(spr.position).project(camera);
-          if (v.z > 1) return; // behind camera
-          const sx = (v.x * 0.5 + 0.5) * rect.width;
-          const sy = (-v.y * 0.5 + 0.5) * rect.height;
-          const d = Math.hypot(sx - cx, sy - cy);
-          if (d < bestDist) { bestDist = d; best = spr; }
-        });
-        if (best) {
-          showSectionPopup(best.userData, event.clientX, event.clientY);
-        } else {
-          hideSectionPopup();
-        }
-        return;
-      }
       updatePointer(event);
       if (hoveredMesh) setSelected(hoveredMesh.userData.zoneId);
     }
@@ -1191,7 +1088,6 @@
       if (stadiumGroup) stadiumGroup.visible = !showRealModel;
       if (realModelGroup) realModelGroup.visible = showRealModel;
       if (scene) scene.fog = showRealModel ? null : sceneFog;
-      applyLabelVisibility();
     }
 
     function loadRealModel() {
@@ -1224,7 +1120,6 @@
           realModelGroup = new THREE.Group();
           realModelGroup.add(model);
           scene.add(realModelGroup);
-          buildSectionLabels();
           applyModelVisibility();
         },
         undefined,
@@ -1250,123 +1145,6 @@
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
-    }
-
-    // ---- Section number labels ------------------------------------------------
-    // The model is a single textured mesh with no per-section data, so labels are
-    // authored and placed by angle/height around the bowl using Dodger Stadium's
-    // real level/number ranges. Positions are representative approximations.
-    // Bowl is centered at origin; home plate is toward -Z, center field +Z.
-    // rx/rz form an ellipse matched to the bowl; zc nudges the ring toward the
-    // outfield so the behind-home labels sit on the lower seating, not the lot.
-    const SECTION_LEVELS = [
-      { level: "Field Level",   prefix: "",    start: 1,   end: 53,  count: 9, rx: 25, rz: 21, zc: 6, height: 3.0,  rows: "A-N", bg: "#1e5ea8" },
-      { level: "Loge Level",    prefix: "",    start: 101, end: 168, count: 9, rx: 30, rz: 25, zc: 5, height: 7.0,  rows: "A-L", bg: "#0e1c2a" },
-      { level: "Reserve Level", prefix: "",    start: 1,   end: 57,  count: 9, rx: 35, rz: 29, zc: 4, height: 11.0, rows: "A-S", bg: "#0e1c2a" },
-      { level: "Top Deck",      prefix: "TD ", start: 1,   end: 13,  count: 7, rx: 40, rz: 33, zc: 3, height: 15.5, rows: "A-U", bg: "#235f95" }
-    ];
-    const SECTION_ARC = 210 * Math.PI / 180; // horseshoe sweep around home plate
-
-    function makeTextSprite(text, bg) {
-      const dpr = 2;
-      const fontPx = 52;
-      const measure = document.createElement("canvas").getContext("2d");
-      measure.font = `bold ${fontPx}px Inter, Arial, sans-serif`;
-      const textW = measure.measureText(text).width;
-      const padX = 26, padY = 16;
-      const cw = Math.ceil(textW + padX * 2);
-      const ch = fontPx + padY * 2;
-      const canvas2d = document.createElement("canvas");
-      canvas2d.width = cw * dpr;
-      canvas2d.height = ch * dpr;
-      const ctx = canvas2d.getContext("2d");
-      ctx.scale(dpr, dpr);
-      const r = 16;
-      ctx.beginPath();
-      ctx.moveTo(r, 0);
-      ctx.arcTo(cw, 0, cw, ch, r);
-      ctx.arcTo(cw, ch, 0, ch, r);
-      ctx.arcTo(0, ch, 0, 0, r);
-      ctx.arcTo(0, 0, cw, 0, r);
-      ctx.closePath();
-      ctx.fillStyle = bg;
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
-      ctx.stroke();
-      ctx.font = `bold ${fontPx}px Inter, Arial, sans-serif`;
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(text, cw / 2, ch / 2 + 2);
-      const tex = new THREE.CanvasTexture(canvas2d);
-      tex.minFilter = THREE.LinearFilter;
-      tex.anisotropy = 4;
-      // depthTest off so every section number stays readable like a map overlay,
-      // even when its part of the bowl is behind nearer geometry.
-      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
-      const sprite = new THREE.Sprite(mat);
-      sprite.renderOrder = 999;
-      const worldH = 2.5;
-      sprite.scale.set(worldH * cw / ch, worldH, 1);
-      return sprite;
-    }
-
-    function buildSectionLabels() {
-      if (labelGroup) return;
-      labelGroup = new THREE.Group();
-      SECTION_LEVELS.forEach((lvl) => {
-        for (let i = 0; i < lvl.count; i += 1) {
-          const t = lvl.count === 1 ? 0.5 : i / (lvl.count - 1);
-          const num = Math.round(lvl.start + t * (lvl.end - lvl.start));
-          const label = `${lvl.prefix}${num}`;
-          const alpha = -SECTION_ARC / 2 + t * SECTION_ARC;
-          const x = lvl.rx * Math.sin(alpha);
-          const z = lvl.zc - lvl.rz * Math.cos(alpha);
-          const sprite = makeTextSprite(label, lvl.bg);
-          sprite.position.set(x, lvl.height, z);
-          sprite.userData = { section: label, level: lvl.level, rows: lvl.rows };
-          labelGroup.add(sprite);
-        }
-      });
-      labelGroup.visible = showLabels && showRealModel;
-      scene.add(labelGroup);
-    }
-
-    function applyLabelVisibility() {
-      if (labelGroup) labelGroup.visible = showLabels && showRealModel;
-      if (!showLabels) hideSectionPopup();
-    }
-
-    function expandRowRange(range) {
-      const m = /^([A-Z])-([A-Z])$/.exec(range);
-      if (!m) return [range];
-      const out = [];
-      for (let c = m[1].charCodeAt(0); c <= m[2].charCodeAt(0); c += 1) {
-        out.push(String.fromCharCode(c));
-      }
-      return out;
-    }
-
-    const sectionPopup = document.getElementById("sectionPopup");
-    function showSectionPopup(data, clientX, clientY) {
-      if (!sectionPopup) return;
-      const rows = expandRowRange(data.rows).map((r) => `<span class="sp-row">${r}</span>`).join("");
-      sectionPopup.innerHTML =
-        `<div class="sp-title">Section ${data.section}</div>` +
-        `<div class="sp-level">${data.level}</div>` +
-        `<div class="sp-rows">${rows}</div>`;
-      const rect = canvas.getBoundingClientRect();
-      let left = clientX - rect.left + 14;
-      let top = clientY - rect.top + 14;
-      left = Math.min(left, rect.width - 252);
-      top = Math.min(top, rect.height - 120);
-      sectionPopup.style.left = `${Math.max(8, left)}px`;
-      sectionPopup.style.top = `${Math.max(8, top)}px`;
-      sectionPopup.classList.add("visible");
-    }
-    function hideSectionPopup() {
-      if (sectionPopup) sectionPopup.classList.remove("visible");
     }
 
     function animate() {
